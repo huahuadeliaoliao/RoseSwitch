@@ -1,2 +1,2 @@
 # RoseSwitch
-Input method language switching tool built with rust
+As you can see by the name, this tool was developed using rust
