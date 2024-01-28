@@ -1,22 +1,16 @@
-extern crate dbus;
+mod input_method;
+mod window_focus;
 
-use dbus::blocking::Connection;
-use std::time::Duration;
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // 连接到 DBus 会话总线
-    let conn = Connection::new_session()?;
-    let proxy = conn.with_proxy("org.freedesktop.IBus", "/org/freedesktop/IBus", Duration::from_millis(5000));
-
-    // 调用 ListEngines 方法获取输入法列表
-    let engines: (Vec<dbus::arg::Variant<Box<dyn dbus::arg::RefArg>>>,) = proxy.method_call("org.freedesktop.IBus", "ListEngines", ())?;
-    for engine in engines.0 {
-        println!("找到输入法: {:?}", engine);
+fn main() {
+    // 获取当前输入法
+    match input_method::get_current_input_method() {
+        Ok(im) => println!("Current input method: {}", im),
+        Err(e) => eprintln!("Error: {}", e),
     }
 
-    // 调用 GetCurrentEngine 方法获取当前输入法
-    let current_engine: (dbus::arg::Variant<Box<dyn dbus::arg::RefArg>>,) = proxy.method_call("org.freedesktop.IBus", "GetCurrentEngine", ())?;
-    println!("当前输入法: {:?}", current_engine.0);
-
-    Ok(())
+    // 获取当前焦点所在的应用程序
+    match window_focus::get_focused_application_xorg() {
+        Ok(app_name) => println!("Focused application in Xorg: {}", app_name),
+        Err(e) => eprintln!("Error: {}", e),
+    }
 }
