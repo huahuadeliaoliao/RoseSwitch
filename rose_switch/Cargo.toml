@@ -7,3 +7,4 @@ edition = "2021"
 
 [dependencies]
 dbus = "0.9.7"
+x11 = { version = "2.21.0", features = ["xlib"] }

@@ -1,1 +1,5 @@
 target/
+rose_switch/.idea/modules.xml
+rose_switch/.idea/rose_switch.iml
+rose_switch/.idea/vcs.xml
+rose_switch/.idea/.gitignore
