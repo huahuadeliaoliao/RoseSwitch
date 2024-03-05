@@ -1,21 +1,32 @@
-extern crate x11;
-use x11::xlib;
+use x11rb_async::rust_connection::RustConnection;
+use x11rb_async::protocol::xproto::{AtomEnum, GetInputFocusRequest, GetPropertyRequest, Property};
 
-pub fn get_focused_application_xorg() -> Result<(String, String), Box<dyn std::error::Error>> {
-    unsafe {
-        let display = xlib::XOpenDisplay(std::ptr::null());
-        let mut window = 0;
-        xlib::XGetInputFocus(display, &mut window, &mut 0);
+pub async fn get_focused_application_xorg(conn: &RustConnection) -> Result<(String, String), Box<dyn std::error::Error>> {
+    // 获取当前焦点窗口
+    let focus = GetInputFocusRequest::default().send(conn).await?.reply().await?;
+    // 获取 WM_CLASS 属性
+    let prop = GetPropertyRequest {
+        delete: false,
+        window: focus.focus,
+        property: AtomEnum::WM_CLASS.into(),
+        type_: AtomEnum::STRING.into(),
+        long_offset: 0,
+        long_length: u32::MAX,
+        ..Default::default()
+    }
+        .send(conn)
+        .await?
+        .reply()
+        .await?;
 
-        let class_hint = xlib::XAllocClassHint();
-        xlib::XGetClassHint(display, window, class_hint);
-
-        let res_name = std::ffi::CStr::from_ptr((*class_hint).res_name).to_str().unwrap().to_string();
-        let res_class = std::ffi::CStr::from_ptr((*class_hint).res_class).to_str().unwrap().to_string();
-
-        xlib::XFree(class_hint as *mut _);
-        xlib::XCloseDisplay(display);
-
+    // 如果属性存在，将其转换为字符串并返回
+    if let Property::Present(prop) = prop {
+        let wm_class = String::from_utf8(prop.value)?;
+        let mut parts = wm_class.split('\0');
+        let res_name = parts.next().unwrap_or("").to_string();
+        let res_class = parts.next().unwrap_or("").to_string();
         Ok((res_name, res_class))
+    } else {
+        Ok(("".to_string(), "".to_string()))
     }
 }
