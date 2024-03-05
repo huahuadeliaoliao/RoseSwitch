@@ -8,3 +8,8 @@ edition = "2021"
 [dependencies]
 dbus = "0.9.7"
 x11 = { version = "2.21.0", features = ["xlib"] }
+log = "0.4.21"
+env_logger = "0.11.2"
+config = "0.14.0"
+serde = { version = "1.0.197", features = ["derive"] }
+toml = "0.8.10"
