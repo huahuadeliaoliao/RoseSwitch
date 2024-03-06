@@ -7,10 +7,9 @@ edition = "2021"
 
 [dependencies]
 dbus = "0.9.7"
-x11rb = { version = "0.13.0", features = ["all-extensions"] }
 x11rb-async = { version = "0.13.0",features = ["all-extensions"] }
 log = "0.4.21"
-env_logger = "0.11.2"
+simple_logger = "4.3.3"
 config = "0.14.0"
 serde = { version = "1.0.197", features = ["derive"] }
 toml = "0.8.10"

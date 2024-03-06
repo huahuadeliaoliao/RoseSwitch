@@ -1,32 +1,49 @@
 use x11rb_async::rust_connection::RustConnection;
-use x11rb_async::protocol::xproto::{AtomEnum, GetInputFocusRequest, GetPropertyRequest, Property};
+use x11rb_async::protocol::xproto::{Atom, AtomEnum, GetPropertyReply, Window, ConnectionExt};
+use std::error::Error;
 
-pub async fn get_focused_application_xorg(conn: &RustConnection) -> Result<(String, String), Box<dyn std::error::Error>> {
-    // 获取当前焦点窗口
-    let focus = GetInputFocusRequest::default().send(conn).await?.reply().await?;
-    // 获取 WM_CLASS 属性
-    let prop = GetPropertyRequest {
-        delete: false,
-        window: focus.focus,
-        property: AtomEnum::WM_CLASS.into(),
-        type_: AtomEnum::STRING.into(),
-        long_offset: 0,
-        long_length: u32::MAX,
-        ..Default::default()
+pub async fn get_focused_application_xorg(conn: &RustConnection, screen_num: usize) -> Result<(String, String), Box<dyn Error>> {
+    let focus = conn.get_input_focus().await?.reply().await?;
+    let window = focus.focus;
+
+    if window == 0 {
+        return Ok(("".to_string(), "".to_string()));
     }
-        .send(conn)
+
+    let wm_class = get_wm_class(conn, window).await?;
+
+    Ok(wm_class)
+}
+
+async fn get_wm_class(conn: &RustConnection, window: Window) -> Result<(String, String), Box<dyn Error>> {
+    let wm_class_atom = intern_atom(conn, b"WM_CLASS").await?;
+    let reply = get_property(conn, false, window, wm_class_atom, AtomEnum::STRING.into(), 0, u32::MAX).await?;
+
+    let wm_class = String::from_utf8(reply.value)?;
+    let mut parts = wm_class.split('\0');
+    let res_name = parts.next().unwrap_or("").to_string();
+    let res_class = parts.next().unwrap_or("").to_string();
+    Ok((res_name, res_class))
+}
+
+async fn intern_atom(conn: &RustConnection, name: &[u8]) -> Result<Atom, Box<dyn Error>> {
+    let reply = conn.intern_atom(false, name).await?.reply().await?;
+    Ok(reply.atom)
+}
+
+async fn get_property(
+    conn: &RustConnection,
+    delete: bool,
+    window: Window,
+    property: Atom,
+    type_: Atom,
+    long_offset: u32,
+    long_length: u32,
+) -> Result<GetPropertyReply, Box<dyn Error>> {
+    let reply = conn
+        .get_property(delete, window, property, type_, long_offset, long_length)
         .await?
         .reply()
         .await?;
-
-    // 如果属性存在，将其转换为字符串并返回
-    if let Property::Present(prop) = prop {
-        let wm_class = String::from_utf8(prop.value)?;
-        let mut parts = wm_class.split('\0');
-        let res_name = parts.next().unwrap_or("").to_string();
-        let res_class = parts.next().unwrap_or("").to_string();
-        Ok((res_name, res_class))
-    } else {
-        Ok(("".to_string(), "".to_string()))
-    }
+    Ok(reply)
 }

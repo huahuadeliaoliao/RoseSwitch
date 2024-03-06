@@ -1,4 +1,5 @@
 [mappings]
-"code, Code" = "rime"
-"Wechat.exe, Wine" = "rime"
-"jetbrians-clion, jetbrians-clion" = "rime"
+"code" = "rime"
+"dev.warp.Warp" = "rime"
+"Wechat.exe" = "rime"
+"floorp" = "rime"
