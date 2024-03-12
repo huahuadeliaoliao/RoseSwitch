@@ -2,7 +2,7 @@ use x11rb_async::rust_connection::RustConnection;
 use x11rb_async::protocol::xproto::{Atom, AtomEnum, GetPropertyReply, Window, ConnectionExt};
 use std::error::Error;
 
-pub async fn get_focused_application_xorg(conn: &RustConnection, screen_num: usize) -> Result<(String, String), Box<dyn Error>> {
+pub async fn get_focused_application_xorg(conn: &RustConnection, _screen_num: usize) -> Result<(String, String), Box<dyn Error>> {
     let focus = conn.get_input_focus().await?.reply().await?;
     let window = focus.focus;
 

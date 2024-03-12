@@ -6,7 +6,6 @@ use simple_logger::SimpleLogger;
 use std::error::Error;
 
 mod window_focus;
-mod input_method;
 mod switch;
 mod config;
 
@@ -25,7 +24,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let root = conn.setup().roots[screen_num].root;
     conn.change_window_attributes(root, &{
         let mut cw = x11rb_async::protocol::xproto::ChangeWindowAttributesAux::default();
-        cw.event_mask = Some(EventMask::ENTER_WINDOW | EventMask::LEAVE_WINDOW | EventMask::FOCUS_CHANGE | EventMask::EXPOSURE | EventMask::STRUCTURE_NOTIFY | EventMask::VISIBILITY_CHANGE | EventMask::RESIZE_REDIRECT );
+        cw.event_mask = Some(EventMask::FOCUS_CHANGE);
         cw
     }).await?;
     conn.flush().await?;
@@ -37,27 +36,15 @@ async fn main() -> Result<(), Box<dyn Error>> {
         trace!("收到事件: {:?}", event);
 
         match event {
-            x11rb_async::protocol::Event::EnterNotify(_)
-            | x11rb_async::protocol::Event::LeaveNotify(_)
-            | x11rb_async::protocol::Event::CreateNotify(_)
-            | x11rb_async::protocol::Event::MapNotify(_)
-            | x11rb_async::protocol::Event::XinputEnter(_)
-            | x11rb_async::protocol::Event::XinputFocusIn(_)
-            | x11rb_async::protocol::Event::XinputFocusOut(_)
-            | x11rb_async::protocol::Event::FocusIn(_)
-            | x11rb_async::protocol::Event::FocusOut(_) => {
-                info!("鼠标进入窗口事件或焦点改变或窗口创建事件");
+            x11rb_async::protocol::Event::FocusIn(_)=> {
+                info!("焦点改变事件");
                 let (res_name, res_class) = window_focus::get_focused_application_xorg(&conn, screen_num).await?;
                 info!("当前焦点应用: res_name = {}, res_class = {}", res_name, res_class);
         
                 if let Some(im_name) = config.mappings.get(&res_name) {
-                    info!("there");
-                    let current_im = input_method::get_current_input_method().await?;
-                    if &current_im != im_name {
-                        info!("切换输入法到: {}", im_name);
-                        switch::switch_input_method(im_name).await?;
-                    }
-                }
+                    info!("切换输入法到: {}", im_name);
+                    switch::switch_input_method(im_name).await?;
+                }                
             }
             _ => {
                 info!("其他事件");
