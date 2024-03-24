@@ -16,3 +16,6 @@ RoseSwitch, developed in Rust, is designed for intelligent switching specificall
 
 - To implement more accurate logic for switching between fcitx5 input methods and application focus.
 - To build a simple yet efficient user interface using Tauri, enhancing the user experience.
+
+## Icon
+<img src="icon/RoseSwitch.png" width="300" height="300">
