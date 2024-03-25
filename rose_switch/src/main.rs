@@ -1,6 +1,8 @@
-use x11rb_async::rust_connection::RustConnection;
-use x11rb_async::protocol::xproto::{EventMask, ConnectionExt};
+use std::pin::Pin;
+use std::future::Future;
 use x11rb_async::connection::Connection;
+use x11rb_async::protocol::xproto::{EventMask, ConnectionExt, ChangeWindowAttributesAux};
+use x11rb_async::rust_connection::RustConnection;
 use log::{info, trace};
 use simple_logger::SimpleLogger;
 use std::error::Error;
@@ -8,6 +10,27 @@ use std::error::Error;
 mod window_focus;
 mod switch;
 mod config;
+
+async fn set_event_mask_for_window(conn: &RustConnection, window: u32) -> Result<(), Box<dyn Error>> {
+    let mut attributes = ChangeWindowAttributesAux::default();
+    attributes.event_mask = Some(
+        EventMask::FOCUS_CHANGE
+    );
+    conn.change_window_attributes(window, &attributes).await?;
+    Ok(())
+}
+
+fn set_event_mask_for_all_windows(conn: &'_ RustConnection, window: u32) -> Pin<Box<dyn Future<Output = Result<(), Box<dyn Error>>> + '_>> {
+    Box::pin(async move {
+        set_event_mask_for_window(conn, window).await?;
+
+        let tree = conn.query_tree(window).await?.reply().await?;
+        for child in tree.children {
+            set_event_mask_for_all_windows(conn, child).await?;
+        }
+        Ok(())
+    })
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -22,12 +45,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     info!("与X11服务器的异步连接建立完成");
 
     let root = conn.setup().roots[screen_num].root;
-    conn.change_window_attributes(root, &{
-        let mut cw = x11rb_async::protocol::xproto::ChangeWindowAttributesAux::default();
-        cw.event_mask = Some(EventMask::FOCUS_CHANGE);
-        cw
-    }).await?;
-    conn.flush().await?;
+    set_event_mask_for_all_windows(&conn, root).await?;
     info!("事件订阅完成");
 
     loop {
