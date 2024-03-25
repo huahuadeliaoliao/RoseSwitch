@@ -12,21 +12,29 @@ mod switch;
 mod config;
 
 async fn set_event_mask_for_window(conn: &RustConnection, window: u32) -> Result<(), Box<dyn Error>> {
-    let mut attributes = ChangeWindowAttributesAux::default();
-    attributes.event_mask = Some(
-        EventMask::FOCUS_CHANGE
-    );
-    conn.change_window_attributes(window, &attributes).await?;
-    Ok(())
+    match conn.get_window_attributes(window).await {
+        Ok(_) => {
+            let mut attributes = ChangeWindowAttributesAux::default();
+            attributes.event_mask = Some(EventMask::FOCUS_CHANGE);
+            conn.change_window_attributes(window, &attributes).await?;
+            Ok(())
+        },
+        Err(e) => {
+            eprintln!("Error getting window attributes: {:?}", e);
+            Ok(())
+        }
+    }
 }
 
-fn set_event_mask_for_all_windows(conn: &'_ RustConnection, window: u32) -> Pin<Box<dyn Future<Output = Result<(), Box<dyn Error>>> + '_>> {
+fn set_event_mask_for_parent_and_child_windows(conn: &'_ RustConnection, root: u32, current_window: u32, parent: u32) -> Pin<Box<dyn Future<Output = Result<(), Box<dyn Error>>> + '_>> {
     Box::pin(async move {
-        set_event_mask_for_window(conn, window).await?;
+        if current_window == root || parent == root {
+            set_event_mask_for_window(conn, current_window).await?;
+        }
 
-        let tree = conn.query_tree(window).await?.reply().await?;
+        let tree = conn.query_tree(current_window).await?.reply().await?;
         for child in tree.children {
-            set_event_mask_for_all_windows(conn, child).await?;
+            set_event_mask_for_parent_and_child_windows(conn, root, child, current_window).await?;
         }
         Ok(())
     })
@@ -45,8 +53,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
     info!("与X11服务器的异步连接建立完成");
 
     let root = conn.setup().roots[screen_num].root;
-    set_event_mask_for_all_windows(&conn, root).await?;
-    info!("事件订阅完成");
+    set_event_mask_for_parent_and_child_windows(&conn, root, root, root).await?;
+    info!("为所有父窗口及其子窗口设置事件订阅完成，除了根窗口");
 
     loop {
         info!("等待事件");
@@ -54,15 +62,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
         trace!("收到事件: {:?}", event);
 
         match event {
-            x11rb_async::protocol::Event::FocusIn(_)=> {
-                info!("焦点改变事件");
-                let (res_name, res_class) = window_focus::get_focused_application_xorg(&conn, screen_num).await?;
-                info!("当前焦点应用: res_name = {}, res_class = {}", res_name, res_class);
-        
-                if let Some(im_name) = config.mappings.get(&res_name) {
-                    info!("切换输入法到: {}", im_name);
-                    switch::switch_input_method(im_name).await?;
-                }                
+            x11rb_async::protocol::Event::FocusIn(focus_event) => {
+                if focus_event.event == root {
+                    info!("Focus event from root window, ignored.");
+                } else {
+                    if let Ok((res_name, res_class)) = window_focus::get_focused_application_xorg(&conn, screen_num).await {
+                        info!("当前焦点应用: res_name = {}, res_class = {}", res_name, res_class);
+                
+                        if let Some(im_name) = config.mappings.get(&res_name) {
+                            info!("切换输入法到: {}", im_name);
+                            switch::switch_input_method(im_name).await?;
+                        }
+                    } else {
+                        info!("无法获取焦点窗口的应用信息，可能窗口已关闭");
+                    }
+                }
             }
             _ => {
                 info!("其他事件");
